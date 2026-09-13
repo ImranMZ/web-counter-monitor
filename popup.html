@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Web Counter Monitor</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="header">
+    <img src="icons/icon48.png" alt="" class="logo" />
+    <div class="title-wrap">
+      <h1>Web Counter Monitor</h1>
+      <span id="status" class="status status-starting">Initializing&hellip;</span>
+    </div>
+  </header>
+
+  <section class="config-section">
+    <label class="field">
+      <span class="field-label">Target page URL</span>
+      <input type="url" id="pageUrl" class="text-input" spellcheck="false" autocomplete="off" placeholder="https://example.com/dashboard" />
+    </label>
+    <label class="field">
+      <span class="field-label">Counter label</span>
+      <input type="text" id="matchLabel" class="text-input" spellcheck="false" autocomplete="off" placeholder="Matched Unique IMEI" />
+    </label>
+    <small class="field-hint">Open the page with your counter, then enter its exact text label. The extension will watch the number next to it and alert you on every change.</small>
+  </section>
+
+  <section class="value-card">
+    <div class="value-label">Current Count</div>
+    <div id="value" class="value">&mdash;</div>
+    <div id="updatedAt" class="updated-at">Baseline not recorded</div>
+  </section>
+
+  <section class="controls">
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Desktop alerts</strong>
+        <small>Receive a desktop notification whenever the count changes</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="enabled" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Auto-refresh page</strong>
+        <small>Reloads the target page every 60 seconds to check for updates</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="autoRefresh" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Alert on increase only</strong>
+        <small>Suppress alerts when the count decreases</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="onlyIncrease" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Keep alert on screen</strong>
+        <small>Alert stays visible until you dismiss it</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="persistAlert" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Push to phone (ntfy.sh)</strong>
+        <small>Install the free ntfy app and subscribe to your topic for phone alerts</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="ntfyEnabled" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <div id="ntfyConfig" class="ntfy-config hidden">
+      <label class="field">
+        <span class="field-label">Topic name</span>
+        <input type="text" id="ntfyTopic" class="text-input" spellcheck="false" autocomplete="off" placeholder="counter-monitor-xxxxxxxx" />
+      </label>
+      <small class="field-hint">On your phone, open the ntfy app, tap Subscribe, and enter this exact topic name to receive push alerts.</small>
+      <small id="ntfyStatus" class="field-hint push-hint"></small>
+    </div>
+  </section>
+
+  <section class="log-section">
+    <div class="log-head">
+      <h2>Change history</h2>
+      <button id="clearLog" class="btn-ghost" type="button">Clear history</button>
+    </div>
+    <ul id="log" class="log-list">
+      <li class="log-empty">No changes recorded</li>
+    </ul>
+  </section>
+
+  <footer class="footer">
+    <button id="testAlert" class="btn btn-secondary" type="button">Send test notification</button>
+    <button id="openPage" class="btn" type="button">Open target page</button>
+  </footer>
+
+  <script src="popup.js"></script>
+</body>
+</html>
