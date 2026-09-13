@@ -4,16 +4,26 @@ const el = {
   status: document.getElementById('status'),
   value: document.getElementById('value'),
   updatedAt: document.getElementById('updatedAt'),
+  lastChecked: document.getElementById('lastChecked'),
+  nextRefresh: document.getElementById('nextRefresh'),
+  refreshCountdown: document.getElementById('refreshCountdown'),
+  healthDot: document.getElementById('healthDot'),
   pageUrl: document.getElementById('pageUrl'),
   matchLabel: document.getElementById('matchLabel'),
   enabled: document.getElementById('enabled'),
   onlyIncrease: document.getElementById('onlyIncrease'),
   persistAlert: document.getElementById('persistAlert'),
   autoRefresh: document.getElementById('autoRefresh'),
+  autoOpenTab: document.getElementById('autoOpenTab'),
+  stallAlertEnabled: document.getElementById('stallAlertEnabled'),
+  stallThreshold: document.getElementById('stallThreshold'),
   ntfyEnabled: document.getElementById('ntfyEnabled'),
   ntfyConfig: document.getElementById('ntfyConfig'),
   ntfyTopic: document.getElementById('ntfyTopic'),
   ntfyStatus: document.getElementById('ntfyStatus'),
+  heartbeatEnabled: document.getElementById('heartbeatEnabled'),
+  heartbeatIntervalRow: document.getElementById('heartbeatIntervalRow'),
+  heartbeatIntervalMin: document.getElementById('heartbeatIntervalMin'),
   log: document.getElementById('log'),
   clearLog: document.getElementById('clearLog'),
   testAlert: document.getElementById('testAlert'),
@@ -42,12 +52,31 @@ function fmtTime(ts) {
 }
 
 function render(state) {
-  const { lastValue, lastChangedAt, log, status, statusDetail, settings } = state;
+  const { lastValue, lastChangedAt, log, status, statusDetail, settings, consecutiveNotFound, stalledAlertSent, lastCheckedAt } = state;
 
   el.value.textContent = fmt(lastValue);
   el.updatedAt.textContent = lastChangedAt
     ? `Last updated: ${fmtTime(lastChangedAt)}`
     : 'Baseline not recorded';
+
+  // Last checked timestamp
+  el.lastChecked.textContent = lastCheckedAt
+    ? `Last checked: ${fmtTime(lastCheckedAt)}`
+    : 'Last checked: \u2014';
+
+  // Health dot
+  if (consecutiveNotFound === 0) {
+    el.healthDot.className = 'health-dot health-ok';
+    el.healthDot.title = 'Watcher healthy';
+  } else if (consecutiveNotFound < (settings.stallThreshold || 3)) {
+    el.healthDot.className = 'health-dot health-warning';
+    el.healthDot.title = `Watcher: ${consecutiveNotFound} consecutive miss(es)`;
+  } else {
+    el.healthDot.className = 'health-dot health-error';
+    el.healthDot.title = stalledAlertSent
+      ? 'Watcher stalled \u2014 alert sent'
+      : `Watcher: ${consecutiveNotFound} consecutive misses`;
+  }
 
   el.pageUrl.value = settings.pageUrl || '';
   el.matchLabel.value = settings.matchLabel || '';
@@ -57,9 +86,15 @@ function render(state) {
   el.onlyIncrease.checked = !!settings.onlyIncrease;
   el.persistAlert.checked = !!settings.persistAlert;
   el.autoRefresh.checked = !!settings.autoRefresh;
+  el.autoOpenTab.checked = !!settings.autoOpenTab;
+  el.stallAlertEnabled.checked = !!settings.stallAlertEnabled;
+  el.stallThreshold.value = String(settings.stallThreshold || 3);
   el.ntfyEnabled.checked = !!settings.ntfyEnabled;
   el.ntfyTopic.value = settings.ntfyTopic || '';
   el.ntfyConfig.classList.toggle('hidden', !settings.ntfyEnabled);
+  el.heartbeatEnabled.checked = !!settings.heartbeatEnabled;
+  el.heartbeatIntervalMin.value = String(settings.heartbeatIntervalMin || 30);
+  el.heartbeatIntervalRow.classList.toggle('hidden', !settings.heartbeatEnabled);
 
   const push = state.ntfyLastPush;
   el.ntfyStatus.textContent = '';
@@ -89,6 +124,9 @@ function render(state) {
   el.status.textContent = label;
   el.status.title = statusDetail || '';
 
+  // Next refresh countdown
+  updateNextRefreshCountdown();
+
   const items = (log || []).slice().reverse().slice(0, 20);
   if (!items.length) {
     el.log.innerHTML = '<li class="log-empty">No changes recorded</li>';
@@ -112,9 +150,38 @@ function render(state) {
   });
 }
 
+let countdownInterval = null;
+
+function updateNextRefreshCountdown() {
+  chrome.alarms.get('auto-refresh', (alarm) => {
+    if (alarm && alarm.scheduledTime) {
+      const remaining = Math.max(0, Math.ceil((alarm.scheduledTime - Date.now()) / 1000));
+      el.refreshCountdown.textContent = remaining;
+      el.nextRefresh.classList.remove('hidden');
+    } else {
+      el.nextRefresh.classList.add('hidden');
+    }
+  });
+}
+
+function startCountdownTimer() {
+  if (countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = setInterval(updateNextRefreshCountdown, 1000);
+  updateNextRefreshCountdown();
+}
+
+function stopCountdownTimer() {
+  if (countdownInterval) {
+    clearInterval(countdownInterval);
+    countdownInterval = null;
+  }
+  el.nextRefresh.classList.add('hidden');
+}
+
 async function refresh() {
   const state = await send({ action: 'getSnapshot' });
   if (state) render(state);
+  startCountdownTimer();
 
   // If the target page is open in the active tab, pull the live value.
   if (state && state.settings.pageUrl) {
@@ -163,6 +230,21 @@ el.autoRefresh.addEventListener('change', async (e) => {
   refresh();
 });
 
+el.autoOpenTab.addEventListener('change', async (e) => {
+  await send({ action: 'setAutoOpenTab', value: e.target.checked });
+  refresh();
+});
+
+el.stallAlertEnabled.addEventListener('change', async (e) => {
+  await send({ action: 'setStallAlertEnabled', value: e.target.checked });
+  refresh();
+});
+
+el.stallThreshold.addEventListener('change', async (e) => {
+  await send({ action: 'setStallThreshold', value: e.target.value });
+  refresh();
+});
+
 el.ntfyEnabled.addEventListener('change', async (e) => {
   await send({ action: 'setNtfyEnabled', value: e.target.checked });
   refresh();
@@ -170,6 +252,16 @@ el.ntfyEnabled.addEventListener('change', async (e) => {
 
 el.ntfyTopic.addEventListener('change', async (e) => {
   await send({ action: 'setNtfyTopic', value: e.target.value });
+  refresh();
+});
+
+el.heartbeatEnabled.addEventListener('change', async (e) => {
+  await send({ action: 'setHeartbeatEnabled', value: e.target.checked });
+  refresh();
+});
+
+el.heartbeatIntervalMin.addEventListener('change', async (e) => {
+  await send({ action: 'setHeartbeatIntervalMin', value: e.target.value });
   refresh();
 });
 
@@ -193,5 +285,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
     refresh();
   }
 });
+
+window.addEventListener('beforeunload', stopCountdownTimer);
 
 refresh();

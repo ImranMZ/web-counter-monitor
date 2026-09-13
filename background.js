@@ -8,13 +8,16 @@ const STATE_KEY = 'counterState';
 const SETTINGS_KEY = 'counterSettings';
 const LEGACY_STATE_KEY = 'egadgetState';
 const LEGACY_SETTINGS_KEY = 'egadgetSettings';
-const COOLDOWN_MS = 3000; // identical old->new pair within 3s = duplicate tab
+const COOLDOWN_MS = 3000;
 const LOG_MAX = 50;
 const BADGE_COLOR = '#2563eb';
 const DEFAULT_LABEL = 'Matched Unique IMEI';
 const ALARM_REFRESH = 'auto-refresh';
 const ALARM_PERIOD_MIN = 1;
+const ALARM_HEARTBEAT = 'heartbeat';
 const WATCHER_ID = 'counter-watcher';
+const STALLED_THRESHOLD = 3;
+const HEARTBEAT_INTERVALS = [15, 30, 60, 120];
 
 // Serialise storage reads/writes so concurrent tabs can't interleave.
 let writeChain = Promise.resolve();
@@ -126,8 +129,13 @@ async function reloadTargetTabs() {
   try {
     const tabs = await chrome.tabs.query({ url: pattern });
     const ids = tabs.map((t) => t.id).filter((id) => id !== undefined);
-    await Promise.all(ids.map((id) => chrome.tabs.reload(id)));
-    if (ids.length) console.log(`[monitor] auto-refresh reloading ${ids.length} tab(s)`);
+    if (ids.length) {
+      await Promise.all(ids.map((id) => chrome.tabs.reload(id)));
+      console.log(`[monitor] auto-refresh reloading ${ids.length} tab(s)`);
+    } else if (settings.autoOpenTab && settings.enabled) {
+      await chrome.tabs.create({ url: settings.pageUrl });
+      console.log('[monitor] no matching tab — auto-opening target page');
+    }
   } catch (err) {
     console.warn('[monitor] auto-refresh reload failed:', err);
   }
@@ -136,6 +144,34 @@ async function reloadTargetTabs() {
 async function applyAutoRefresh(setting) {
   if (setting) await ensureRefreshAlarm();
   else await clearRefreshAlarm();
+}
+
+async function ensureHeartbeatAlarm() {
+  try {
+    const settings = await getSettings();
+    const existing = await chrome.alarms.get(ALARM_HEARTBEAT);
+    const period = settings.heartbeatIntervalMin;
+    if (!existing || existing.periodInMinutes !== period) {
+      await chrome.alarms.create(ALARM_HEARTBEAT, { periodInMinutes: period });
+      console.log(`[monitor] heartbeat alarm scheduled (every ${period} min)`);
+    }
+  } catch (err) {
+    console.warn('[monitor] failed to schedule heartbeat alarm:', err);
+  }
+}
+
+async function clearHeartbeatAlarm() {
+  try {
+    await chrome.alarms.clear(ALARM_HEARTBEAT);
+    console.log('[monitor] heartbeat alarm cleared');
+  } catch (err) {
+    console.warn('[monitor] failed to clear heartbeat alarm:', err);
+  }
+}
+
+async function applyHeartbeat(setting) {
+  if (setting) await ensureHeartbeatAlarm();
+  else await clearHeartbeatAlarm();
 }
 
 async function getState() {
@@ -150,6 +186,9 @@ async function getState() {
     log: s.log ?? [],
     status: s.status ?? 'starting',
     statusDetail: s.statusDetail ?? '',
+    consecutiveNotFound: s.consecutiveNotFound ?? 0,
+    stalledAlertSent: s.stalledAlertSent ?? false,
+    lastCheckedAt: s.lastCheckedAt ?? null,
   };
 }
 
@@ -172,6 +211,11 @@ async function getSettings() {
     ntfyTopic: s.ntfyTopic ?? '',
     pageUrl: s.pageUrl ?? '',
     matchLabel: s.matchLabel ?? DEFAULT_LABEL,
+    autoOpenTab: s.autoOpenTab ?? true,
+    stallThreshold: s.stallThreshold ?? STALLED_THRESHOLD,
+    stallAlertEnabled: s.stallAlertEnabled ?? true,
+    heartbeatEnabled: s.heartbeatEnabled ?? false,
+    heartbeatIntervalMin: s.heartbeatIntervalMin ?? 30,
   };
 }
 
@@ -259,7 +303,7 @@ function headerSafe(str) {
 // Send a push notification to the phone via ntfy.sh.
 // Never enqueues here: callers already hold the serialized write section
 // (this is only ever invoked from within an enqueued task).
-async function sendNtfy(topic, title, message, clickUrl) {
+async function sendNtfy(topic, title, message, clickUrl, options = {}) {
   let url;
   try {
     url = new URL(`https://ntfy.sh/${encodeURIComponent(topic)}`).toString();
@@ -271,7 +315,7 @@ async function sendNtfy(topic, title, message, clickUrl) {
       method: 'POST',
       headers: {
         Title: headerSafe(title),
-        Priority: 'high',
+        Priority: options.priority || 'high',
         Click: headerSafe(clickUrl),
       },
       body: message,
@@ -280,12 +324,23 @@ async function sendNtfy(topic, title, message, clickUrl) {
       console.warn(`[monitor] ntfy push failed: HTTP ${resp.status}`);
       return { ok: false, status: `HTTP ${resp.status}` };
     }
-    console.log(`[monitor] ntfy push sent (${topic})`);
+    console.log(`[monitor] ntfy push sent (${topic}) priority=${options.priority || 'high'}`);
     return { ok: true, status: `HTTP ${resp.status}` };
   } catch (err) {
     console.warn('[monitor] ntfy push error:', err);
     return { ok: false, status: String((err && err.message) || err) };
   }
+}
+
+async function sendHeartbeat() {
+  const settings = await getSettings();
+  if (!settings.ntfyEnabled || !settings.ntfyTopic) return null;
+  const state = await getState();
+  const title = `${APP_NAME} \u2014 Heartbeat`;
+  const current = state.lastValue === null ? 'baseline not set' : fmt(state.lastValue);
+  const message = `Watcher alive. Current count: ${current}. Status: ${state.status}.`;
+  const result = await sendNtfy(settings.ntfyTopic, title, message, settings.pageUrl, { priority: 'low' });
+  return { at: Date.now(), ...result };
 }
 
 async function pushNtfy(title, message, clickUrl) {
@@ -314,6 +369,9 @@ async function onReportValue(value) {
           lastValue: value,
           status: settings.enabled ? 'watching' : 'paused',
           statusDetail: 'Baseline count recorded',
+          consecutiveNotFound: 0,
+          stalledAlertSent: false,
+          lastCheckedAt: now,
         },
       });
       await updateBadge(value);
@@ -328,6 +386,9 @@ async function onReportValue(value) {
             ...state,
             status: settings.enabled ? 'watching' : 'paused',
             statusDetail: '',
+            consecutiveNotFound: 0,
+            stalledAlertSent: false,
+            lastCheckedAt: now,
           },
         });
       }
@@ -342,6 +403,9 @@ async function onReportValue(value) {
       lastChangedAt: now,
       status: settings.enabled ? 'watching' : 'paused',
       statusDetail: 'Count changed',
+      consecutiveNotFound: 0,
+      stalledAlertSent: false,
+      lastCheckedAt: now,
     };
     await chrome.storage.local.set({ [STATE_KEY]: update });
     await updateBadge(value);
@@ -388,16 +452,46 @@ async function onUpdateWatchStatus(found) {
   await enqueue(async () => {
     const state = await getState();
     const settings = await getSettings();
-    if (!found) {
+    const now = Date.now();
+    let consecutiveNotFound = state.consecutiveNotFound;
+    let stalledAlertSent = state.stalledAlertSent;
+    let status = state.status;
+    let statusDetail = state.statusDetail;
+
+    if (found) {
+      consecutiveNotFound = 0;
+      stalledAlertSent = false;
+      status = settings.enabled ? 'watching' : 'paused';
+      statusDetail = '';
+      await updateBadge(state.lastValue);
+    } else {
+      consecutiveNotFound += 1;
       await updateBadge(null);
+      status = 'element-not-found';
+      statusDetail = 'Counter not found \u2014 verify the target page is open and you are signed in';
+
+      if (settings.stallAlertEnabled && consecutiveNotFound >= settings.stallThreshold && !stalledAlertSent) {
+        await retireAlert(state.lastNotifyId);
+        const notifyId = `stalled-${now}-${notifySeq++}`;
+        const title = `\u26a0\ufe0f Watcher Stalled`;
+        const message = `Counter not found for ${consecutiveNotFound} consecutive checks \u2014 session expired or page changed?`;
+        await showAlert(notifyId, { title, message }, true);
+        if (settings.ntfyEnabled && settings.ntfyTopic) {
+          await sendNtfy(settings.ntfyTopic, title, message, settings.pageUrl, { priority: 'urgent' });
+        }
+        stalledAlertSent = true;
+        console.log('[monitor] watcher stalled alert fired');
+      }
     }
+
     await chrome.storage.local.set({
       [STATE_KEY]: {
         ...state,
-        status: found ? (settings.enabled ? 'watching' : 'paused') : 'element-not-found',
-        statusDetail: found
-          ? ''
-          : 'Counter not found \u2014 verify the target page is open and you are signed in',
+        status,
+        statusDetail,
+        consecutiveNotFound,
+        stalledAlertSent,
+        lastCheckedAt: now,
       },
     });
   });
@@ -409,11 +503,12 @@ async function onTestAlert() {
     const state = await getState();
     const settings = await getSettings();
     const current = state.lastValue;
+    const now = Date.now();
 
     // Retire the previous toast before showing the test one for the same
     // single-toast guarantee as the organic path.
     await retireAlert(state.lastNotifyId);
-    const notifyId = `test-${Date.now()}-${notifySeq++}`;
+    const notifyId = `test-${now}-${notifySeq++}`;
     const title = `${APP_NAME} \u2014 Test Alert`;
     const message =
       current === null
@@ -426,6 +521,7 @@ async function onTestAlert() {
         ...state,
         lastNotifyId: notifyId,
         ntfyLastPush: push || state.ntfyLastPush,
+        lastCheckedAt: now,
       },
     });
   });
@@ -494,6 +590,39 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await setSettings({ matchLabel: String(msg.value || '').trim() });
         return { ok: true };
 
+      case 'setAutoOpenTab':
+        await setSettings({ autoOpenTab: !!msg.value });
+        return { ok: true };
+
+      case 'setStallThreshold': {
+        const value = parseInt(msg.value, 10);
+        if (!isNaN(value) && value >= 2 && value <= 10) {
+          await setSettings({ stallThreshold: value });
+        }
+        return { ok: true };
+      }
+
+      case 'setStallAlertEnabled':
+        await setSettings({ stallAlertEnabled: !!msg.value });
+        return { ok: true };
+
+      case 'setHeartbeatEnabled': {
+        const value = !!msg.value;
+        await setSettings({ heartbeatEnabled: value });
+        await applyHeartbeat(value);
+        return { ok: true };
+      }
+
+      case 'setHeartbeatIntervalMin': {
+        const value = parseInt(msg.value, 10);
+        if (HEARTBEAT_INTERVALS.includes(value)) {
+          await setSettings({ heartbeatIntervalMin: value });
+          const settings = await getSettings();
+          if (settings.heartbeatEnabled) await ensureHeartbeatAlarm();
+        }
+        return { ok: true };
+      }
+
       case 'testAlert': {
         const push = await onTestAlert();
         return { ok: true, push };
@@ -546,6 +675,7 @@ chrome.notifications.onClicked.addListener(async () => {
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm && alarm.name === ALARM_REFRESH) await reloadTargetTabs();
+  if (alarm && alarm.name === ALARM_HEARTBEAT) await sendHeartbeat();
 });
 
 // One-time migration from the legacy internal key names so an existing
@@ -584,5 +714,6 @@ chrome.runtime.onInstalled.addListener(async () => {
   // updates, and reload any open tabs so a fresh content script loads.
   await ensureWatcher();
   await applyAutoRefresh(settings.autoRefresh);
+  await applyHeartbeat(settings.heartbeatEnabled);
   await reloadTargetTabs();
 });

@@ -9,12 +9,16 @@ It generalizes to any office-automation metric that's only computed server-side 
 ## Features
 
 - **Change detection** — watches the number next to any text label on your target page and alerts on every change.
-- **Auto-refresh** — reloads the target page every 60 seconds from a background `chrome.alarms` tick (no stale content scripts), which is what surfaces new counts.
+- **Auto-refresh** — reloads the target page every 60 seconds (configurable 30s–5m) from a background `chrome.alarms` tick, which surfaces new counts even when content scripts go stale.
 - **Desktop alerts** — professional, single-toast notifications. The previous toast is dismissed *before* the next one appears, so you never see a stale alert next to a fresh one.
 - **Phone push (ntfy.sh)** — free push notifications to your phone. Subscribe to your private topic in the ntfy app and receive the same alerts remotely; tapping an alert opens the target page on your phone.
 - **Alert on increase only** — optional mode that suppresses alerts on decreases.
 - **Local-only configuration** — the target page URL lives in your own browser storage, never on a server.
 - **Change history** — last 50 changes with timestamps in the popup.
+- **Auto-open if closed** — if no matching tab exists on refresh, the extension opens the target page automatically (toggleable).
+- **Stalled watcher alert** — if the counter can't be found for N consecutive checks (session expired, page changed, offline), a distinct high-priority alert fires on desktop and phone.
+- **Phone heartbeat** — optional periodic silent ping to ntfy (15m–2h) so you know the watcher is alive even when nothing changes.
+- **Health dashboard in popup** — live status dot (green/yellow/red), last-checked timestamp, and next-refresh countdown.
 
 ## Install
 
@@ -52,10 +56,14 @@ When the number changes, a desktop notification appears with the `old → new` v
 | Counter label            | Text next to the number to track. |
 | Desktop alerts           | Enable/disable desktop notifications. |
 | Auto-refresh page        | Reload the target every 60s (drives change detection). |
+| Auto-open if closed      | Open the target page automatically if no tab matches on refresh. |
 | Alert on increase only   | Only alert when the number goes up. |
 | Keep alert on screen     | Leave the notification visible until dismissed. |
+| Stalled watcher alert    | Alert when the counter isn't found for N consecutive checks. |
+| Stall threshold          | How many consecutive misses before the stalled alert fires (2–10). |
 | Push to phone (ntfy.sh)  | Forward alerts to your phone. |
 | Topic name               | Private ntfy topic for your subscriptions. |
+| Phone heartbeat          | Send a periodic silent health ping to your phone (15m–2h). |
 
 ## How it works
 
@@ -65,6 +73,7 @@ When the number changes, a desktop notification appears with the `old → new` v
 
 ## Change log
 
+- **v2.1.0** — Auto-open target tab if missing; stalled-watcher watchdog with urgent ntfy push; optional phone heartbeat (15m–2h); popup health dot + last-checked + next-refresh countdown; new settings: autoOpenTab, stallThreshold, stallAlertEnabled, heartbeatEnabled, heartbeatIntervalMin.
 - **v2.0.0** — Target page and label are now user-configurable (per-site injection); renamed project to *Web Counter Monitor*; one-time migration preserves existing settings.
 - **v1.3.1** — Auto-refresh moved to a background alarm so it keeps working regardless of content-script staleness.
 - **v1.3.0** — ntfy.sh phone push added.

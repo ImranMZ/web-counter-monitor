@@ -330,3 +330,49 @@ body {
 
 .push-hint.push-ok { color: var(--green); }
 .push-hint.push-fail { color: var(--red); }
+
+.value-card {
+  position: relative;
+}
+
+.last-checked {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.next-refresh {
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.health-dot {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid var(--bg);
+}
+
+.health-dot.health-ok {
+  background: var(--green);
+}
+
+.health-dot.health-warning {
+  background: var(--amber);
+}
+
+.health-dot.health-error {
+  background: var(--red);
+}
+
+.text-input.select-input {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 32px;
+}

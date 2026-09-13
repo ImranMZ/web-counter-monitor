@@ -30,6 +30,9 @@
     <div class="value-label">Current Count</div>
     <div id="value" class="value">&mdash;</div>
     <div id="updatedAt" class="updated-at">Baseline not recorded</div>
+    <div id="lastChecked" class="last-checked">Last checked: \u2014</div>
+    <div id="nextRefresh" class="next-refresh hidden">Next check in <span id="refreshCountdown">\u2014</span>s</div>
+    <div id="healthDot" class="health-dot" title="Watcher health"></div>
   </section>
 
   <section class="controls">
@@ -52,6 +55,38 @@
         <input type="checkbox" id="autoRefresh" />
         <span class="slider"></span>
       </span>
+    </label>
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Auto-open if closed</strong>
+        <small>Open the target page automatically if no matching tab exists on refresh</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="autoOpenTab" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Stalled watcher alert</strong>
+        <small>Notify when the counter can't be found for several consecutive checks</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="stallAlertEnabled" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label class="field">
+      <span class="field-label">Stall threshold</span>
+      <select id="stallThreshold" class="text-input">
+        <option value="2">2 checks</option>
+        <option value="3" selected>3 checks</option>
+        <option value="4">4 checks</option>
+        <option value="5">5 checks</option>
+        <option value="6">6 checks</option>
+        <option value="8">8 checks</option>
+        <option value="10">10 checks</option>
+      </select>
     </label>
     <label class="switch-row">
       <span class="switch-text">
@@ -91,6 +126,25 @@
       <small class="field-hint">On your phone, open the ntfy app, tap Subscribe, and enter this exact topic name to receive push alerts.</small>
       <small id="ntfyStatus" class="field-hint push-hint"></small>
     </div>
+    <label class="switch-row">
+      <span class="switch-text">
+        <strong>Phone heartbeat</strong>
+        <small>Send a periodic silent health ping to your phone so you know the watcher is alive</small>
+      </span>
+      <span class="switch">
+        <input type="checkbox" id="heartbeatEnabled" />
+        <span class="slider"></span>
+      </span>
+    </label>
+    <label class="field" id="heartbeatIntervalRow" class="hidden">
+      <span class="field-label">Heartbeat interval</span>
+      <select id="heartbeatIntervalMin" class="text-input">
+        <option value="15">15 minutes</option>
+        <option value="30" selected>30 minutes</option>
+        <option value="60">1 hour</option>
+        <option value="120">2 hours</option>
+      </select>
+    </label>
   </section>
 
   <section class="log-section">
