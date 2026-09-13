@@ -2,7 +2,9 @@
 
 A Chrome (Manifest V3) extension that watches a numeric counter on any web page and raises an alert the moment it changes — on the taskbar via desktop notifications and optionally on your phone via the free [ntfy.sh](https://ntfy.sh) push service.
 
-Built for office-automation scenarios where a metric is only computed server-side on page load (e.g. an application dashboard, an order queue, an IMEI or registration counter), so a periodic reload plus change detection is enough to surface new activity.
+> **Why this exists** — When a phone is stolen, its IMEI is blocked the moment it's reported and matched in a central registry. That single counter is a live signal: a new match usually means a recovered stolen device — often with the person carrying it — has been located, and responding quickly matters. Manually refreshing the dashboard and hoping you glance at the right second was too slow and too risky. This extension turns that daily manual checkpoint into an instant desktop + phone alert, helping cut minutes of delay to seconds.
+
+It generalizes to any office-automation metric that's only computed server-side on page load — an application dashboard, an order queue, an IMEI or registration counter — since a periodic reload plus change detection is all it takes to surface new activity.
 
 ## Features
 
