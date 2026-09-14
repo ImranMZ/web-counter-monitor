@@ -41,6 +41,22 @@ function targetPattern(pageUrl) {
   }
 }
 
+// Appends (or replaces) a unique cache-busting query parameter so every
+// auto-refresh navigates to a URL that neither the browser cache nor a
+// server-side/CDN cache has ever seen, forcing a fresh server render of a
+// counter that is computed on page load. Existing query params and hashes
+// are preserved. Falls back to the original URL if it is not parseable.
+function cacheBustedUrl(pageUrl, now = Date.now()) {
+  try {
+    const u = new URL(pageUrl);
+    u.searchParams.delete('_wcm');
+    u.searchParams.set('_wcm', String(now));
+    return u.toString();
+  } catch (_) {
+    return pageUrl;
+  }
+}
+
 async function unregisterWatcher() {
   try {
     await chrome.scripting.unregisterContentScripts({ ids: [WATCHER_ID] });
@@ -130,10 +146,10 @@ async function reloadTargetTabs() {
     const tabs = await chrome.tabs.query({ url: pattern });
     const ids = tabs.map((t) => t.id).filter((id) => id !== undefined);
     if (ids.length) {
-      // bypassCache forces a real server fetch on every tick so a counter
-      // that is computed server-side on page load is always freshly rendered
-      // instead of being served from the browser cache.
-      await Promise.all(ids.map((id) => chrome.tabs.reload(id, { bypassCache: true })));
+      // Navigate each tab to a unique cache-busting URL (browser AND server
+      // cache busting — a counter computed server-side on page load is always
+      // freshly rendered, never served from a stale cache entry).
+      await Promise.all(ids.map((id) => chrome.tabs.update(id, { url: cacheBustedUrl(settings.pageUrl) })));
       console.log(`[monitor] auto-refresh reloading ${ids.length} tab(s)`);
     } else if (settings.autoOpenTab && settings.enabled) {
       await chrome.tabs.create({ url: settings.pageUrl });
