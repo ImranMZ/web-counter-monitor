@@ -130,7 +130,10 @@ async function reloadTargetTabs() {
     const tabs = await chrome.tabs.query({ url: pattern });
     const ids = tabs.map((t) => t.id).filter((id) => id !== undefined);
     if (ids.length) {
-      await Promise.all(ids.map((id) => chrome.tabs.reload(id)));
+      // bypassCache forces a real server fetch on every tick so a counter
+      // that is computed server-side on page load is always freshly rendered
+      // instead of being served from the browser cache.
+      await Promise.all(ids.map((id) => chrome.tabs.reload(id, { bypassCache: true })));
       console.log(`[monitor] auto-refresh reloading ${ids.length} tab(s)`);
     } else if (settings.autoOpenTab && settings.enabled) {
       await chrome.tabs.create({ url: settings.pageUrl });

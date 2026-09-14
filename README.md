@@ -73,7 +73,7 @@ When the number changes, a desktop notification appears with the `old → new` v
 
 ## Change log
 
-- **v2.1.0** — Auto-open target tab if missing; stalled-watcher watchdog with urgent ntfy push; optional phone heartbeat (15m–2h); popup health dot + last-checked + next-refresh countdown; new settings: autoOpenTab, stallThreshold, stallAlertEnabled, heartbeatEnabled, heartbeatIntervalMin.
+- **v2.1.0** — Auto-open target tab if missing; stalled-watcher watchdog with urgent ntfy push; optional phone heartbeat (15m–2h); popup health dot + last-checked + next-refresh countdown; new settings: autoOpenTab, stallThreshold, stallAlertEnabled, heartbeatEnabled, heartbeatIntervalMin. Fix: auto-refresh now reloads with cache bypass so a counter that is computed server-side on page load is always freshly fetched instead of served from the browser cache; content script re-reads the counter once the configured label has loaded (prevents a wrong-label read on page load).
 - **v2.0.0** — Target page and label are now user-configurable (per-site injection); renamed project to *Web Counter Monitor*; one-time migration preserves existing settings.
 - **v1.3.1** — Auto-refresh moved to a background alarm so it keeps working regardless of content-script staleness.
 - **v1.3.0** — ntfy.sh phone push added.

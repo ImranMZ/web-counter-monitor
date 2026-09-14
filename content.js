@@ -23,14 +23,17 @@
   }
 
   // Loads the configured label so we only ever match the target stat card.
-  // Best-effort: falls back to the default if storage is unavailable.
-  function loadLabel() {
+  // Best-effort: falls back to the default if storage is unavailable. The
+  // optional callback runs after the label resolves so callers can re-read
+  // the counter with the real label.
+  function loadLabel(done) {
     try {
       chrome.storage.local.get(SETTINGS_KEY, (r) => {
         const s = r[SETTINGS_KEY] || {};
         if (typeof s.matchLabel === 'string' && s.matchLabel.trim()) {
           matchLabel = s.matchLabel.trim();
         }
+        if (typeof done === 'function') done();
       });
     } catch (_) {}
   }
@@ -115,9 +118,13 @@
   }
 
   function start() {
-    loadLabel();
     if (document.body) {
       armWatchers();
+      // The label is loaded asynchronously, so re-read the counter once the
+      // real label is available — the synchronous recompute('init') inside
+      // armWatchers may have matched the default label instead, which would
+      // cause a bogus "not found" (or stale match) on page load.
+      loadLabel(() => recompute('init'));
       return;
     }
     setTimeout(start, 300);
