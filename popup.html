@@ -33,6 +33,7 @@
     <div id="lastChecked" class="last-checked">Last checked: \u2014</div>
     <div id="nextRefresh" class="next-refresh hidden">Next check in <span id="refreshCountdown">\u2014</span>s</div>
     <div id="healthDot" class="health-dot" title="Watcher health"></div>
+    <button id="checkNow" class="check-now" type="button" title="Force a fresh server fetch of the target page now">Check now</button>
   </section>
 
   <section class="controls">
@@ -161,6 +162,7 @@
     <button id="testAlert" class="btn btn-secondary" type="button">Send test notification</button>
     <button id="openPage" class="btn" type="button">Open target page</button>
   </footer>
+  <div class="version-line">Web Counter Monitor <span id="version">v?</span></div>
 
   <script src="popup.js"></script>
 </body>

@@ -558,6 +558,10 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         await onUpdateWatchStatus(!!msg.found);
         return { ok: true };
 
+      case 'refreshNow':
+        await reloadTargetTabs();
+        return { ok: true };
+
       case 'getSnapshot': {
         const state = await getState();
         const settings = await getSettings();

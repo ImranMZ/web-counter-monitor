@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Web Counter Monitor",
-  "version": "2.0.0",
+  "version": "2.1.1",
   "description": "Monitors a numeric counter on any web page and raises desktop and phone (ntfy.sh) alerts whenever the count changes.",
   "permissions": ["storage", "notifications", "tabs", "alarms", "scripting"],
   "optional_host_permissions": ["https://*/*"],

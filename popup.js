@@ -28,6 +28,8 @@ const el = {
   clearLog: document.getElementById('clearLog'),
   testAlert: document.getElementById('testAlert'),
   openPage: document.getElementById('openPage'),
+  checkNow: document.getElementById('checkNow'),
+  version: document.getElementById('version'),
 };
 
 const STATUS_LABELS = {
@@ -184,13 +186,14 @@ async function refresh() {
   startCountdownTimer();
 
   // If the target page is open in the active tab, pull the live value.
+  // Match loosely on origin + pathname (ignoring query params such as the
+  // cache-bust "_wcm" and trailing-slash differences) so the live read still
+  // works after the auto-refresh rewrites the tab URL.
   if (state && state.settings.pageUrl) {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      if (tab && tab.url && tab.url.startsWith(state.settings.pageUrl)) {
-        const live = await chrome.tabs
-          .sendMessage(tab.id, { action: 'queryLiveValue' })
-          .catch(() => null);
+      if (tab && tab.url && isSameDashboardTab(tab.url, state.settings.pageUrl)) {
+        const live = await chrome.tabs.sendMessage(tab.id, { action: 'queryLiveValue' }).catch(() => null);
         if (live && live.found) {
           el.value.textContent = fmt(live.value);
           el.updatedAt.textContent = 'Live \u2014 from open tab';
@@ -199,6 +202,31 @@ async function refresh() {
     } catch (_) {}
   }
 }
+
+function isSameDashboardTab(tabUrl, pageUrl) {
+  try {
+    const a = new URL(tabUrl);
+    const b = new URL(pageUrl);
+    const norm = (p) => (p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p);
+    return a.origin === b.origin && norm(a.pathname) === norm(b.pathname);
+  } catch (_) {
+    return false;
+  }
+}
+
+el.checkNow.addEventListener('click', async () => {
+  el.checkNow.disabled = true;
+  el.checkNow.textContent = 'Checking\u2026';
+  await send({ action: 'refreshNow' });
+  // The target tab reloads; poll the snapshot a few times so the popup
+  // reflects the freshly reported value instead of the stale one.
+  for (let i = 0; i < 6; i++) {
+    await new Promise((r) => setTimeout(r, 700));
+    await refresh();
+  }
+  el.checkNow.disabled = false;
+  el.checkNow.textContent = 'Check now';
+});
 
 el.pageUrl.addEventListener('change', async (e) => {
   await send({ action: 'setPageUrl', value: e.target.value });
@@ -287,5 +315,9 @@ chrome.storage.onChanged.addListener((changes, area) => {
 });
 
 window.addEventListener('beforeunload', stopCountdownTimer);
+
+try {
+  el.version.textContent = 'v' + chrome.runtime.getManifest().version;
+} catch (_) {}
 
 refresh();

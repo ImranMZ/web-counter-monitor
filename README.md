@@ -73,6 +73,7 @@ When the number changes, a desktop notification appears with the `old → new` v
 
 ## Change log
 
+- **v2.1.1** — Popup now shows the running version (v2.1.1) so you can always tell which build is active; added a **Check now** button that forces an immediate fresh fetch of the target page; popup's live read now tolerates the cache-bust query param and trailing-slash differences, so it no longer falls back to a stale value when the tab URL has been rewritten.
 - **v2.1.0** — Auto-open target tab if missing; stalled-watcher watchdog with urgent ntfy push; optional phone heartbeat (15m–2h); popup health dot + last-checked + next-refresh countdown; new settings: autoOpenTab, stallThreshold, stallAlertEnabled, heartbeatEnabled, heartbeatIntervalMin. Fix: auto-refresh now navigates each tab to a unique cache-busting URL (rewrite `?_wcm=<timestamp>` every tick) so a counter computed server-side on page load is always freshly rendered — this defeats both the browser cache and server-side/CDN caches; content script re-reads the counter once the configured label has loaded (prevents a wrong-label read on page load).
 - **v2.0.0** — Target page and label are now user-configurable (per-site injection); renamed project to *Web Counter Monitor*; one-time migration preserves existing settings.
 - **v1.3.1** — Auto-refresh moved to a background alarm so it keeps working regardless of content-script staleness.
